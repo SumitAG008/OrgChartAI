@@ -1,0 +1,17 @@
+# AI/ML Dependencies - ALWAYS INSTALLED (USP Feature)
+# This is the core differentiator of OrgChartAI
+
+# Core AI/ML
+torch>=2.2.0
+scikit-learn==1.3.2
+numpy==1.26.2
+pandas==2.1.4
+transformers==4.35.2
+
+# Additional AI libraries
+sentence-transformers==2.2.2
+openai>=1.0.0
+anthropic>=0.7.0
+
+# Vector Database for embeddings
+chromadb==0.4.18
