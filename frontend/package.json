@@ -1,7 +1,9 @@
 {
-  "name": "orgchartai-frontend",
+  "name": "meldra-orgchartai",
   "version": "1.0.0",
-  "description": "AI-Powered Organizational Intelligence Platform - Frontend",
+  "description": "meldra AI - Organizational Intelligence (meldra library)",
+  "author": "SumitAG008",
+  "repository": "https://github.com/SumitAG008/OrgChartAI",
   "type": "module",
   "scripts": {
     "dev": "vite",

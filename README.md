@@ -1,6 +1,8 @@
-# OrgChartAI - AI-Powered Organizational Intelligence Platform
+# OrgChartAI
 
-A next-generation, enterprise-grade organizational chart and intelligence platform with AI-powered insights, HRIS integration, and advanced visualization capabilities.
+**Part of the [meldra](https://github.com/SumitAG008) library** · by [SumitAG008](https://github.com/SumitAG008)
+
+AI-powered organizational intelligence platform with SuccessFactors sync, HRIS integration, and advanced visualization. Part of the **meldra** suite.
 
 ## 🚀 Features
 
@@ -154,12 +156,13 @@ Complete documentation available in `/docs`:
 
 ## 📄 License
 
-Proprietary - All rights reserved
+Proprietary - All rights reserved.  
+**meldra library** © [SumitAG008](https://github.com/SumitAG008)
 
 ## 🤝 Contributing
 
-This is a private enterprise project. For access, contact the repository owner.
+This is a private project under the **meldra** library. For access, contact [SumitAG008](https://github.com/SumitAG008).
 
 ---
 
-**Built with ❤️ for modern organizational intelligence**
+**meldra · Built for modern organizational intelligence**

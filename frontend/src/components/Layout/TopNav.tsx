@@ -22,7 +22,7 @@ const TopNav: React.FC = () => {
           </div>
           <div className="flex items-center gap-1">
             <span className="text-lg font-semibold text-gray-900">
-              OrgChart with AI Intelligence
+              meldra AI
             </span>
             <button
               onClick={() => setShowOrgMenu(!showOrgMenu)}
