@@ -126,26 +126,26 @@ class SuccessFactorsClient:
     
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """Make authenticated OData request
-        
+
         Uses format: /odata/v2/{EntityName}?format=json&$top=1000
         """
         await self._ensure_authenticated()
-        
+
         # Build URL with format=json parameter
         url = f"{self.api_url}/odata/v2/{endpoint}"
-        
+
         # Add format=json and $top=1000 to params if not already present
         if params is None:
             params = {}
-        
+
         # Add format=json if not present
         if "format" not in params:
             params["format"] = "json"
-        
+
         # Add $top=1000 if not present and no limit specified
         if "$top" not in params:
             params["$top"] = 1000
-        
+
         # Use Basic Auth if OAuth token not available
         # SuccessFactors requires specific Accept headers to avoid 406 errors
         if self.use_basic_auth and self.basic_auth_header:
@@ -158,11 +158,66 @@ class SuccessFactorsClient:
                 "Authorization": f"Bearer {self.access_token}",
                 "Accept": "application/json"
             }
-        
+
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers, params=params, timeout=60.0)
-            response.raise_for_status()
-            return response.json()
+            try:
+                response = await client.get(url, headers=headers, params=params, timeout=60.0)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                # Provide more detailed error message
+                error_detail = ""
+                try:
+                    error_body = e.response.json()
+                    error_detail = error_body.get("error", {}).get("message", {}).get("value", str(error_body))
+                except:
+                    error_detail = e.response.text[:500]  # First 500 chars of error response
+
+                logger.error(f"SuccessFactors API error for {endpoint}: {e.response.status_code} - {error_detail}")
+
+                # Build helpful error message based on status code
+                if e.response.status_code == 400:
+                    raise Exception(
+                        f"Bad Request (400) for {endpoint}. "
+                        f"This usually means invalid query parameters or field access issues. "
+                        f"Error details: {error_detail}. "
+                        f"URL: {e.request.url}"
+                    )
+                elif e.response.status_code == 401:
+                    raise Exception(
+                        f"Authentication failed (401) for {endpoint}. "
+                        f"Please check your credentials and API URL. "
+                        f"Error details: {error_detail}"
+                    )
+                elif e.response.status_code == 403:
+                    raise Exception(
+                        f"Access forbidden (403) for {endpoint}. "
+                        f"Your user may not have permission to access this entity. "
+                        f"Error details: {error_detail}"
+                    )
+                elif e.response.status_code == 404:
+                    raise Exception(
+                        f"Entity not found (404): {endpoint}. "
+                        f"This entity may not exist in your SuccessFactors instance. "
+                        f"Error details: {error_detail}"
+                    )
+                else:
+                    raise Exception(
+                        f"HTTP {e.response.status_code} error for {endpoint}: {error_detail}"
+                    )
+            except httpx.TimeoutException:
+                raise Exception(
+                    f"Request timeout for {endpoint}. "
+                    f"The SuccessFactors API is taking too long to respond. "
+                    f"This might be due to large data volumes or slow API performance."
+                )
+            except Exception as e:
+                if "Exception" in str(type(e).__name__) and "400" in str(e):
+                    # Already formatted error, re-raise
+                    raise
+                # Other network errors
+                logger.error(f"Network error for {endpoint}: {str(e)}")
+                raise Exception(f"Network error accessing SuccessFactors API: {str(e)}")
     
     async def test_connection(self) -> Dict[str, Any]:
         """Test connection to SuccessFactors"""
@@ -232,29 +287,58 @@ class SuccessFactorsClient:
     
     async def get_positions(self, top: Optional[int] = None, skip: Optional[int] = None,
                            filter_query: Optional[str] = None) -> List[SuccessFactorsPosition]:
-        """Fetch positions from SuccessFactors"""
+        """Fetch positions from SuccessFactors
+
+        Position is an effective-dated entity in SuccessFactors, so we add a default
+        filter to get currently effective positions unless a custom filter is provided.
+        """
         params = {}
         if top:
             params["$top"] = top
         if skip:
             params["$skip"] = skip
+
+        # Position is effective-dated, add default filter for current positions
+        # This helps avoid 400 errors from SuccessFactors
+        if not filter_query:
+            # Get positions that are currently effective (no end date or end date in future)
+            # Using a simple filter that works with most SF instances
+            filter_query = "status eq 'A' or status eq 'Active' or status eq '1'"
+
         if filter_query:
             params["$filter"] = filter_query
-        
-        result = await self._make_request("Position", params=params)
-        positions = []
-        
-        for item in result.get("d", {}).get("results", []):
-            positions.append(SuccessFactorsPosition(**item))
-        
-        return positions
+
+        try:
+            result = await self._make_request("Position", params=params)
+            positions = []
+
+            for item in result.get("d", {}).get("results", []):
+                positions.append(SuccessFactorsPosition(**item))
+
+            return positions
+        except Exception as e:
+            # If filter fails, try without any filter (some SF instances don't support filtering)
+            logger.warning(f"Position fetch with filter failed: {str(e)}, retrying without filter")
+            params_no_filter = {}
+            if top:
+                params_no_filter["$top"] = top
+            if skip:
+                params_no_filter["$skip"] = skip
+
+            result = await self._make_request("Position", params=params_no_filter)
+            positions = []
+
+            for item in result.get("d", {}).get("results", []):
+                positions.append(SuccessFactorsPosition(**item))
+
+            return positions
     
-    async def get_org_units(self, entity_name: Optional[str] = None, top: Optional[int] = None, 
+    async def get_org_units(self, entity_name: Optional[str] = None, top: Optional[int] = None,
                             skip: Optional[int] = None, filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetch organizational units from SuccessFactors
-        
+
         Args:
-            entity_name: Specific entity to fetch (FOLegalEntity, FODepartment, FODivision, 
+            entity_name: Specific entity to fetch (FOLegalEntity, FODepartment, FODivision,
                         FOBusinessUnit, FOCostCenter, etc.). If None, fetches generic OrgUnit.
         """
         entity = entity_name or "OrgUnit"
@@ -263,16 +347,40 @@ class SuccessFactorsClient:
             params["$top"] = top
         if skip:
             params["$skip"] = skip
+
+        # FODepartment, FODivision, etc. are effective-dated entities
+        # Add default filter for currently active ones if no custom filter is provided
+        if not filter_query and entity.startswith("FO"):
+            # Try to get active records - common approach for FO* entities
+            filter_query = "status eq 'ACTIVE' or status eq 'A' or status eq 'Active'"
+
         if filter_query:
             params["$filter"] = filter_query
-        
-        result = await self._make_request(entity, params=params)
-        org_units = []
-        
-        for item in result.get("d", {}).get("results", []):
-            org_units.append(item)
-        
-        return org_units
+
+        try:
+            result = await self._make_request(entity, params=params)
+            org_units = []
+
+            for item in result.get("d", {}).get("results", []):
+                org_units.append(item)
+
+            return org_units
+        except Exception as e:
+            # If filter fails, try without filter
+            logger.warning(f"{entity} fetch with filter failed: {str(e)}, retrying without filter")
+            params_no_filter = {}
+            if top:
+                params_no_filter["$top"] = top
+            if skip:
+                params_no_filter["$skip"] = skip
+
+            result = await self._make_request(entity, params=params_no_filter)
+            org_units = []
+
+            for item in result.get("d", {}).get("results", []):
+                org_units.append(item)
+
+            return org_units
     
     async def get_legal_entities(self, top: Optional[int] = None, skip: Optional[int] = None,
                                  filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -298,25 +406,71 @@ class SuccessFactorsClient:
                               filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetch Cost Centers (FOCostCenter) from SuccessFactors"""
         return await self.get_org_units("FOCostCenter", top=top, skip=skip, filter_query=filter_query)
+
+    async def get_job_codes(self, top: Optional[int] = None, skip: Optional[int] = None,
+                           filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch Job Codes (FOJobCode) from SuccessFactors"""
+        return await self.get_org_units("FOJobCode", top=top, skip=skip, filter_query=filter_query)
+
+    async def get_job_functions(self, top: Optional[int] = None, skip: Optional[int] = None,
+                               filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch Job Functions (FOJobFunction) from SuccessFactors"""
+        return await self.get_org_units("FOJobFunction", top=top, skip=skip, filter_query=filter_query)
     
     async def get_per_person(self, top: Optional[int] = None, skip: Optional[int] = None,
                             filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Fetch Person data (PerPerson) from SuccessFactors"""
+        """Fetch Person data (PerPerson) from SuccessFactors
+
+        PerPerson is an effective-dated entity and can have field access restrictions.
+        We use fallback logic to handle various SuccessFactors configurations.
+        """
         params = {}
         if top:
             params["$top"] = top
         if skip:
             params["$skip"] = skip
+
+        # Add filter if provided
         if filter_query:
             params["$filter"] = filter_query
-        
-        result = await self._make_request("PerPerson", params=params)
-        persons = []
-        
-        for item in result.get("d", {}).get("results", []):
-            persons.append(item)
-        
-        return persons
+
+        try:
+            result = await self._make_request("PerPerson", params=params)
+            persons = []
+
+            for item in result.get("d", {}).get("results", []):
+                persons.append(item)
+
+            return persons
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"PerPerson fetch failed: {error_msg}")
+
+            # Check if this is a 400 Bad Request - might be field access or permissions issue
+            if "400" in error_msg or "Bad Request" in error_msg:
+                # Try with a simpler approach - use User entity instead
+                logger.info("PerPerson failed with 400, trying User entity as fallback")
+                try:
+                    users = await self.get_users(top=top, skip=skip, filter_query=filter_query)
+                    # Convert User objects to dict format
+                    persons = []
+                    for user in users:
+                        if hasattr(user, '__dict__'):
+                            persons.append(user.__dict__)
+                        else:
+                            persons.append(user)
+                    logger.info(f"Successfully fetched {len(persons)} records from User entity as fallback")
+                    return persons
+                except Exception as user_error:
+                    logger.error(f"User fallback also failed: {str(user_error)}")
+                    raise Exception(
+                        f"Failed to fetch person data from both PerPerson and User entities. "
+                        f"PerPerson error: {error_msg}. User error: {str(user_error)}. "
+                        f"Please check field permissions in SuccessFactors or use manual field mapping."
+                    )
+
+            # Re-raise other errors
+            raise
     
     async def get_custom_mdf_object(self, object_name: str, top: Optional[int] = None,
                                    skip: Optional[int] = None, filter_query: Optional[str] = None) -> List[Dict[str, Any]]:

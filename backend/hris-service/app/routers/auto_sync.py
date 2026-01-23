@@ -103,6 +103,26 @@ DEFAULT_MAPPINGS = {
             {"source": "externalCode", "target": "code", "transform": None},
         ]
     },
+    "FOJobCode": {
+        "target_entity": "org_unit",
+        "mappings": [
+            {"source": "externalCode", "target": "hris_id", "transform": None},
+            {"source": "name", "target": "name", "transform": None},
+            {"source": "status", "target": "status", "transform": "status_active"},
+            {"source": "parent", "target": "parent_id", "transform": None},
+            {"source": "externalCode", "target": "code", "transform": None},
+        ]
+    },
+    "FOJobFunction": {
+        "target_entity": "org_unit",
+        "mappings": [
+            {"source": "externalCode", "target": "hris_id", "transform": None},
+            {"source": "name", "target": "name", "transform": None},
+            {"source": "status", "target": "status", "transform": "status_active"},
+            {"source": "parent", "target": "parent_id", "transform": None},
+            {"source": "externalCode", "target": "code", "transform": None},
+        ]
+    },
     "Position": {
         "target_entity": "position",
         "mappings": [
@@ -282,10 +302,12 @@ async def auto_sync_task(
             org_structure_entities_ordered = [
                 # Phase 1: Org Units (must sync first to establish hierarchy)
                 "FODepartment",
-                "FOCostCenter", 
+                "FOCostCenter",
                 "FOLegalEntity",
                 "FODivision",
                 "FOBusinessUnit",
+                "FOJobCode",
+                "FOJobFunction",
                 # Phase 2: Positions (depend on org units)
                 "Position",
                 # Phase 3: Employees (depend on positions)
@@ -323,7 +345,7 @@ async def auto_sync_task(
             sync_service = SyncService(db)
             
             # Group entities by phase for better logging
-            org_unit_entities = ["FODepartment", "FOCostCenter", "FOLegalEntity", "FODivision", "FOBusinessUnit"]
+            org_unit_entities = ["FODepartment", "FOCostCenter", "FOLegalEntity", "FODivision", "FOBusinessUnit", "FOJobCode", "FOJobFunction"]
             position_entities = ["Position"]
             employee_entities = ["PerPerson", "User"]
             

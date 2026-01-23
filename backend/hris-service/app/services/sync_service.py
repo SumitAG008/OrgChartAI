@@ -138,7 +138,7 @@ class SyncService:
         # Fetch data from SF based on entity type
         sf_data = []
         try:
-            if source_entity_name in ["FOLegalEntity", "FODepartment", "FODivision", "FOBusinessUnit", "FOCostCenter"]:
+            if source_entity_name in ["FOLegalEntity", "FODepartment", "FODivision", "FOBusinessUnit", "FOCostCenter", "FOJobCode", "FOJobFunction"]:
                 # Org Unit entities
                 if source_entity_name == "FOLegalEntity":
                     sf_data = await client.get_legal_entities(top=limit)
@@ -150,6 +150,10 @@ class SyncService:
                     sf_data = await client.get_business_units(top=limit)
                 elif source_entity_name == "FOCostCenter":
                     sf_data = await client.get_cost_centers(top=limit)
+                elif source_entity_name == "FOJobCode":
+                    sf_data = await client.get_job_codes(top=limit)
+                elif source_entity_name == "FOJobFunction":
+                    sf_data = await client.get_job_functions(top=limit)
                 else:
                     sf_data = await client.get_org_units(source_entity_name, top=limit)
             elif source_entity_name == "Position":
