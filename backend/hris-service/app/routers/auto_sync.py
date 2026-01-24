@@ -244,6 +244,12 @@ async def auto_sync_task(
     api_url: str
 ):
     """Background task for auto sync"""
+    print(f"=== AUTO SYNC TASK STARTED ===")
+    print(f"Sync ID: {sync_id}")
+    print(f"Connection ID: {connection_id}")
+    print(f"Company ID: {company_id}")
+    print(f"Username: {username}")
+    print(f"API URL: {api_url}")
     logger.info(f"=== AUTO SYNC TASK STARTED ===")
     logger.info(f"Sync ID: {sync_id}")
     logger.info(f"Connection ID: {connection_id}")
@@ -474,6 +480,9 @@ async def start_auto_sync(
 
     No manual mapping configuration required!
     """
+    print(f"=== AUTO SYNC ENDPOINT CALLED ===")
+    print(f"Connection ID: {connection_id}")
+    print(f"Credentials received: company_id={credentials.company_id}, username={credentials.username}, api_url={credentials.api_url}")
     logger.info(f"=== AUTO SYNC ENDPOINT CALLED ===")
     logger.info(f"Connection ID: {connection_id}")
     logger.info(f"Credentials received: company_id={credentials.company_id}, username={credentials.username}, api_url={credentials.api_url}")
