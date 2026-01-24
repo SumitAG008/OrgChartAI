@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import successfactors, connections, sync, mapping, sync_history, comprehensive_sync, auto_sync, fast_api
+from app.routers import successfactors, connections, sync, mapping, sync_history, comprehensive_sync, auto_sync, fast_api, arrow_api
 from app.middleware.audit import AuditMiddleware
 
 security = HTTPBearer()
@@ -51,6 +51,7 @@ app.include_router(auto_sync.router, prefix="/api/v1/hris", tags=["Auto Sync"])
 app.include_router(mapping.router, prefix="/api/v1/hris", tags=["Field Mapping"])
 app.include_router(sync_history.router, prefix="/api/v1/hris", tags=["Sync History"])
 app.include_router(fast_api.router, prefix="/api/v1/hris", tags=["Fast API (Low Latency)"])
+app.include_router(arrow_api.router, prefix="/api/v1/hris", tags=["Apache Arrow"])
 
 @app.get("/")
 async def root():
