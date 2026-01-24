@@ -461,19 +461,23 @@ class AutoSyncCredentials(BaseModel):
 async def start_auto_sync(
     connection_id: str,
     credentials: AutoSyncCredentials,
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     """
     One-Click Auto Sync - Just provide connection credentials
-    
+
     This endpoint:
     1. Discovers all SuccessFactors entities automatically
     2. Creates default field mappings
     3. Syncs all org structure data
-    
+
     No manual mapping configuration required!
     """
+    logger.info(f"=== AUTO SYNC ENDPOINT CALLED ===")
+    logger.info(f"Connection ID: {connection_id}")
+    logger.info(f"Credentials received: company_id={credentials.company_id}, username={credentials.username}, api_url={credentials.api_url}")
+
     sync_id = str(uuid.uuid4())
     
     # Try to get connection name, or create connection if it doesn't exist
@@ -531,6 +535,7 @@ async def start_auto_sync(
     }
     
     # Start background task
+    logger.info(f"Adding background task for sync_id={sync_id}")
     background_tasks.add_task(
         auto_sync_task,
         sync_id,
@@ -540,7 +545,8 @@ async def start_auto_sync(
         credentials.password,
         credentials.api_url
     )
-    
+    logger.info(f"Background task added successfully for sync_id={sync_id}")
+
     return {
         "sync_id": sync_id,
         "status": "pending",
