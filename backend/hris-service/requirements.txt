@@ -7,3 +7,4 @@ asyncpg==0.29.0
 httpx==0.25.2
 python-dotenv==1.0.0
 cryptography==41.0.7
+pyarrow>=14.0.0
