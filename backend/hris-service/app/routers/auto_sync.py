@@ -244,9 +244,16 @@ async def auto_sync_task(
     api_url: str
 ):
     """Background task for auto sync"""
+    logger.info(f"=== AUTO SYNC TASK STARTED ===")
+    logger.info(f"Sync ID: {sync_id}")
+    logger.info(f"Connection ID: {connection_id}")
+    logger.info(f"Company ID: {company_id}")
+    logger.info(f"Username: {username}")
+    logger.info(f"API URL: {api_url}")
+
     try:
         from app.database import AsyncSessionLocal
-        
+
         async with AsyncSessionLocal() as db:
             # Update status
             auto_sync_store[sync_id].update({
@@ -264,8 +271,11 @@ async def auto_sync_task(
             )
             
             # Authenticate first
+            logger.info(f"Authenticating with SuccessFactors...")
             if not await client.authenticate():
+                logger.error("Authentication failed!")
                 raise Exception("Failed to authenticate with SuccessFactors. Please check your credentials.")
+            logger.info("Authentication successful!")
             
             # Fetch metadata using authenticated client
             metadata_url = f"{api_url}/odata/v2/$metadata"
@@ -288,9 +298,11 @@ async def auto_sync_task(
                 metadata_xml = response.text
             
             # Parse metadata
+            logger.info(f"Parsing metadata ({len(metadata_xml)} bytes)...")
             parser = MetadataParser(metadata_xml)
             all_entities = parser.get_all_entities()
-            
+            logger.info(f"Found {len(all_entities)} total entities in metadata")
+
             # Filter for org structure entities - IN SPECIFIC SEQUENCE
             # Order matters: Org Units first, then Positions, then Employees
             org_structure_entities_ordered = [
@@ -309,7 +321,8 @@ async def auto_sync_task(
             
             # Find entities that exist in SF, maintaining order
             found_entities = [e for e in org_structure_entities_ordered if e in all_entities]
-            
+            logger.info(f"Found {len(found_entities)} org structure entities: {found_entities}")
+
             auto_sync_store[sync_id].update({
                 "status": "mapping",
                 "message": f"Found {len(found_entities)} entities. Creating mappings...",
