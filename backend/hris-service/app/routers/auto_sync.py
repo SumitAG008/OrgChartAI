@@ -21,25 +21,38 @@ import json
 
 logger = logging.getLogger(__name__)
 
+def serialize_for_json(obj: Any) -> Any:
+    """Convert datetime and other non-JSON-serializable objects to JSON-compatible types"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_json(item) for item in obj]
+    return obj
+
 async def send_to_org_service(entity_type: str, data: List[Dict[str, Any]]) -> bool:
     """Send transformed data to org-service"""
     try:
         org_service_url = "http://localhost:8000/api/v1"
-        
+
         # Map entity types to org-service endpoints
         endpoint_map = {
             "org_unit": f"{org_service_url}/org-units/bulk",
             "position": f"{org_service_url}/positions/bulk",
             "employee": f"{org_service_url}/employees/bulk"
         }
-        
+
         endpoint = endpoint_map.get(entity_type)
         if not endpoint:
             logger.warning(f"No endpoint for entity type: {entity_type}")
             return False
-        
+
+        # Serialize data to ensure all datetime objects are converted
+        serialized_data = serialize_for_json(data)
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(endpoint, json={"records": data})
+            response = await client.post(endpoint, json={"records": serialized_data})
             response.raise_for_status()
             return True
     except Exception as e:
@@ -109,18 +122,19 @@ DEFAULT_MAPPINGS = {
             {"source": "positionId", "target": "hris_id", "transform": None},
             {"source": "positionTitle", "target": "title", "transform": None},
             {"source": "positionCode", "target": "code", "transform": None},
-            {"source": "status", "target": "status", "transform": "status_active"},
+            {"source": "code", "target": "code", "transform": None},  # Fallback for code field
             {"source": "orgUnit", "target": "org_unit_id", "transform": None},
+            {"source": "jobCode", "target": "job_code", "transform": None},
         ]
     },
     "PerPerson": {
         "target_entity": "employee",
         "mappings": [
             {"source": "personIdExternal", "target": "hris_id", "transform": None},
+            {"source": "personId", "target": "hris_id", "transform": None},  # Fallback ID field
             {"source": "firstName", "target": "first_name", "transform": None},
             {"source": "lastName", "target": "last_name", "transform": None},
-            {"source": "email", "target": "email", "transform": "lowercase"},
-            {"source": "status", "target": "status", "transform": "status_active"},
+            {"source": "emailAddress", "target": "email", "transform": "lowercase"},  # Standard SF field name
         ]
     },
     "User": {

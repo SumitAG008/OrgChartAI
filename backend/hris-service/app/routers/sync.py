@@ -21,25 +21,40 @@ router = APIRouter()
 # In-memory sync status storage (in production, use Redis or database)
 sync_status_store: Dict[str, Dict[str, Any]] = {}
 
+from datetime import datetime as dt_datetime
+
+def serialize_for_json(obj):
+    """Convert datetime and other non-JSON-serializable objects to JSON-compatible types"""
+    if isinstance(obj, (datetime, dt_datetime)):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_json(item) for item in obj]
+    return obj
+
 async def send_to_org_service(entity_type: str, data: List[Dict[str, Any]]) -> bool:
     """Send transformed data to org-service"""
     try:
         org_service_url = "http://localhost:8000/api/v1"
-        
+
         # Map entity types to org-service endpoints
         endpoint_map = {
             "org_unit": f"{org_service_url}/org-units/bulk",
             "position": f"{org_service_url}/positions/bulk",
             "employee": f"{org_service_url}/employees/bulk"
         }
-        
+
         endpoint = endpoint_map.get(entity_type)
         if not endpoint:
             logger.warning(f"No endpoint for entity type: {entity_type}")
             return False
-        
+
+        # Serialize data to ensure all datetime objects are converted
+        serialized_data = serialize_for_json(data)
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(endpoint, json={"records": data})
+            response = await client.post(endpoint, json={"records": serialized_data})
             response.raise_for_status()
             return True
     except Exception as e:

@@ -126,26 +126,26 @@ class SuccessFactorsClient:
     
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """Make authenticated OData request
-        
+
         Uses format: /odata/v2/{EntityName}?format=json&$top=1000
         """
         await self._ensure_authenticated()
-        
+
         # Build URL with format=json parameter
         url = f"{self.api_url}/odata/v2/{endpoint}"
-        
+
         # Add format=json and $top=1000 to params if not already present
         if params is None:
             params = {}
-        
+
         # Add format=json if not present
         if "format" not in params:
             params["format"] = "json"
-        
+
         # Add $top=1000 if not present and no limit specified
         if "$top" not in params:
             params["$top"] = 1000
-        
+
         # Use Basic Auth if OAuth token not available
         # SuccessFactors requires specific Accept headers to avoid 406 errors
         if self.use_basic_auth and self.basic_auth_header:
@@ -158,9 +158,27 @@ class SuccessFactorsClient:
                 "Authorization": f"Bearer {self.access_token}",
                 "Accept": "application/json"
             }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.get(url, headers=headers, params=params, timeout=60.0)
+
+            # Handle 400 errors specifically for better error messages
+            if response.status_code == 400:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", {}).get("message", {}).get("value", str(error_data))
+                    logger.error(f"SuccessFactors API 400 Error for {endpoint}: {error_msg}")
+                    # If it's a field-related error, remove $select and retry
+                    if "$select" in params and "property" in error_msg.lower():
+                        logger.warning(f"Retrying {endpoint} without $select parameter")
+                        params_without_select = {k: v for k, v in params.items() if k != "$select"}
+                        retry_response = await client.get(url, headers=headers, params=params_without_select, timeout=60.0)
+                        retry_response.raise_for_status()
+                        return retry_response.json()
+                except Exception:
+                    pass
+                response.raise_for_status()
+
             response.raise_for_status()
             return response.json()
     
@@ -231,8 +249,11 @@ class SuccessFactorsClient:
         return users
     
     async def get_positions(self, top: Optional[int] = None, skip: Optional[int] = None,
-                           filter_query: Optional[str] = None) -> List[SuccessFactorsPosition]:
-        """Fetch positions from SuccessFactors"""
+                           filter_query: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch positions from SuccessFactors
+
+        Returns raw dictionaries to handle varying field availability across SF instances.
+        """
         params = {}
         if top:
             params["$top"] = top
@@ -240,13 +261,27 @@ class SuccessFactorsClient:
             params["$skip"] = skip
         if filter_query:
             params["$filter"] = filter_query
-        
+
         result = await self._make_request("Position", params=params)
         positions = []
-        
+
         for item in result.get("d", {}).get("results", []):
-            positions.append(SuccessFactorsPosition(**item))
-        
+            # Return raw dict - fields vary by SF instance
+            # Map common field variations
+            position_data = {
+                "positionId": item.get("code") or item.get("positionId") or item.get("externalCode"),
+                "positionCode": item.get("code") or item.get("positionCode"),
+                "positionTitle": item.get("positionTitle") or item.get("name") or item.get("name_en_US"),
+                "jobCode": item.get("jobCode"),
+                "department": item.get("department") or item.get("orgUnit"),
+                "division": item.get("division"),
+                "reportsToPositionId": item.get("reportsToPosition") or item.get("parentPosition"),
+                "status": item.get("positionStatus") or item.get("status"),  # Try different field names
+            }
+            # Include all original fields for flexibility
+            position_data.update(item)
+            positions.append(position_data)
+
         return positions
     
     async def get_org_units(self, entity_name: Optional[str] = None, top: Optional[int] = None, 
