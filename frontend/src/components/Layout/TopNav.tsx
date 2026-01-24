@@ -11,6 +11,17 @@ const TopNav: React.FC = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMainMenu, setShowMainMenu] = useState(false);
 
+  const handleLogout = () => {
+    // Clear any stored authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
+    sessionStorage.clear();
+
+    // Redirect to login or reload
+    window.location.href = '/login';
+  };
+
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
       {/* Left Section */}
@@ -156,7 +167,10 @@ const TopNav: React.FC = () => {
               <button className="w-full px-4 py-2 text-left text-sm text-black hover:bg-gray-100 font-medium">
                 Settings
               </button>
-              <button className="w-full px-4 py-2 text-left text-sm text-black hover:bg-gray-100 font-medium">
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2 text-left text-sm text-black hover:bg-gray-100 font-medium"
+              >
                 Logout
               </button>
             </div>
